@@ -276,7 +276,7 @@ io.on('connection', (socket) => {
                     x: player.x,
                     y: player.y,
                     targetId: targetId,
-                    speed: 5 // Speed of the shell
+                    speed: 7 // Speed of the shell
                 };
                 activeItems.push(newItem);
                 io.emit('itemUsed', newItem);
@@ -370,44 +370,20 @@ setInterval(() => {
 }, 1000 / 60); // 60 times per second
 
 function updateActiveItems() {
-    let updated = false;
-    for (const item of activeItems) {
+    for (let i = activeItems.length - 1; i >= 0; i--) {
+        const item = activeItems[i];
         if (item.type === 'pierre_bleue') {
-            updated = true;
             const target = players[item.targetId];
             if (!target) {
-                activeItems = activeItems.filter(i => i.id !== item.id);
+                activeItems.splice(i, 1);
+                io.emit('itemDestroyed', item.id);
                 continue;
             }
 
-            // Simple path following
-            const path = currentCircuit.path;
-            let closestPoint = null;
-            let minDistance = Infinity;
-
-            for(let i = 0; i < path.length -1; i++) {
-                const p = closestPointOnLine(item, path[i], path[i+1]);
-                const d = dist(item, p);
-                if (d < minDistance) {
-                    minDistance = d;
-                    closestPoint = p;
-                }
-            }
-
-            const angleToPath = Math.atan2(closestPoint.y - item.y, closestPoint.x - item.x);
             const angleToTarget = Math.atan2(target.y - item.y, target.x - item.x);
+            item.x += item.speed * Math.cos(angleToTarget);
+            item.y += item.speed * Math.sin(angleToTarget);
 
-            // If close to target, go straight for it
-            const distanceToTarget = dist(item, target);
-            let finalAngle = angleToPath;
-            if(distanceToTarget < 200) {
-                finalAngle = angleToTarget;
-            }
-
-            item.x += item.speed * Math.cos(finalAngle);
-            item.y += item.speed * Math.sin(finalAngle);
-
-            // Check for collision with target
             if (dist(item, target) < PLAYER_SIZE.width) {
                 if (!target.recovering) {
                     target.speed = 0;
@@ -418,10 +394,9 @@ function updateActiveItems() {
                         io.emit('playerRecovered', { id: target.id, recovering: false });
                     }, 1500);
                 }
-                activeItems = activeItems.filter(i => i.id !== item.id);
+                activeItems.splice(i, 1);
                 io.emit('itemDestroyed', item.id);
             }
         }
     }
-    return updated;
 }
