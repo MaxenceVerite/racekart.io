@@ -313,7 +313,7 @@ function checkLaps(player) {
     const prevPos = { x: player.x - player.speed * Math.sin(player.angle), y: player.y + player.speed * Math.cos(player.angle) };
     const nextCheckpointIndex = player.checkpoint;
     if (nextCheckpointIndex < currentCircuit.checkpoints.length) {
-        const checkpoint = currentCircuit.checkpoints[nextCheckpointIndex];
+        const checkpoint = currentCircuit.checkpoints[nextCheckpointIndex].line;
         if (line_intersect(prevPos.x, prevPos.y, player.x, player.y, checkpoint.start.x, checkpoint.start.y, checkpoint.end.x, checkpoint.end.y)) {
             player.checkpoint++;
         }
