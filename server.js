@@ -288,7 +288,7 @@ io.on('connection', (socket) => {
                 x: player.x,
                 y: player.y,
                 angle: player.angle,
-                speed: 20,
+                speed: 40,
                 playerId: player.id
             };
             activeItems.push(newItem);
