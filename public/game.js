@@ -354,6 +354,16 @@ function drawMinimap() {
     ctx.restore();
 }
 
+const itemImages = {
+    'carton': new Image(),
+    'pierre_bleue': new Image(),
+    'grappin': new Image()
+};
+itemImages.carton.src = '/assets/carton.png';
+itemImages.pierre_bleue.src = '/assets/pierre_bleue.png';
+itemImages.grappin.src = '/assets/grappin.png';
+
+
 function drawUI() {
     if (!selfId || !players[selfId]) return;
 
@@ -368,9 +378,8 @@ function drawUI() {
     ctx.fillText(`Lap: ${player.lap}`, 20, 20);
 
     // Display item
-    if (player.item) {
-        ctx.font = '16px Arial';
-        ctx.fillText(`Item: ${player.item}`, 20, 50);
+    if (player.item && itemImages[player.item]) {
+        ctx.drawImage(itemImages[player.item], 20, 50, 40, 40);
     }
 }
 
