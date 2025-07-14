@@ -14,6 +14,11 @@ const currentCircuit = circuits[0];
 app.use(express.static('public'));
 
 let players = {};
+let lootboxes = JSON.parse(JSON.stringify(currentCircuit.lootboxes || [])); // Deep copy
+lootboxes.forEach((box, i) => box.id = i);
+let activeItems = [];
+let itemUID = 0;
+
 
 // --- Vector Math and Collision Helpers ---
 
@@ -103,15 +108,25 @@ function applyOffTrackPenalty(player) {
     }
 }
 
-function checkWallCollisions(player) {
-    const worldBoundaries = [
-        {x: 0, y: 0}, {x: currentCircuit.map_size.width, y: 0}, // Top
-        {x: currentCircuit.map_size.width, y: 0}, {x: currentCircuit.map_size.width, y: currentCircuit.map_size.height}, // Right
-        {x: currentCircuit.map_size.width, y: currentCircuit.map_size.height}, {x: 0, y: currentCircuit.map_size.height}, // Bottom
-        {x: 0, y: currentCircuit.map_size.height}, {x: 0, y: 0} // Left
-    ];
+function checkWorldBounds(player) {
+    const { x, y } = player;
+    const { width, height } = currentCircuit.map_size;
+    if (x < 0 || x > width || y < 0 || y > height) {
+        let lastCheckpoint = player.checkpoint > 0 ? currentCircuit.checkpoints[player.checkpoint - 1] : null;
+        if (lastCheckpoint) {
+            player.x = lastCheckpoint.position.x;
+            player.y = lastCheckpoint.position.y;
+        } else {
+            player.x = currentCircuit.startPosition.x;
+            player.y = currentCircuit.startPosition.y;
+        }
+        player.speed = 0;
+        io.to(player.id).emit('playerMoved', player);
+    }
+}
 
-    const boundaries = [...currentCircuit.boundaries.outer, ...currentCircuit.boundaries.inner, ...worldBoundaries];
+function checkWallCollisions(player) {
+    const boundaries = [...currentCircuit.boundaries.outer, ...currentCircuit.boundaries.inner];
     for (let i = 0; i < boundaries.length - 1; i++) {
         const p1 = boundaries[i];
         const p2 = boundaries[i + 1];
@@ -195,9 +210,10 @@ io.on('connection', (socket) => {
         angle: currentCircuit.startAngle,
         steerAngle: 0,
         lap: 0,
-        checkpoint: 0
+        checkpoint: 0,
+        item: null
     };
-    socket.emit('gameState', { players: players, circuit: currentCircuit });
+    socket.emit('gameState', { players, circuit: currentCircuit, lootboxes });
     socket.broadcast.emit('newPlayer', players[socket.id]);
 
     socket.on('disconnect', () => {
@@ -216,14 +232,82 @@ io.on('connection', (socket) => {
         player.steerAngle = movementData.steerAngle;
         player.speed = movementData.speed;
 
+        checkWorldBounds(player);
         checkWallCollisions(player);
         checkCollisions(player);
         applyOffTrackPenalty(player);
         checkLaps(player);
+        checkLootboxPickup(player);
+        checkItemCollision(player);
 
         socket.broadcast.emit('playerMoved', player);
     });
+
+    socket.on('useItem', (itemType) => {
+        const player = players[socket.id];
+        if (!player || player.item !== itemType) return;
+
+        if (itemType === 'carton') {
+            const newItem = {
+                id: itemUID++,
+                type: 'carton',
+                x: player.x - Math.sin(player.angle) * (PLAYER_SIZE.height), // Place it behind the kart
+                y: player.y + Math.cos(player.angle) * (PLAYER_SIZE.height),
+            };
+            activeItems.push(newItem);
+            io.emit('itemUsed', newItem);
+        }
+        player.item = null;
+    });
 });
+
+function checkLootboxPickup(player) {
+    if (player.item) return; // Player already has an item
+
+    for (let i = lootboxes.length - 1; i >= 0; i--) {
+        const box = lootboxes[i];
+        if (dist(player, box) < PLAYER_SIZE.height) { // Simple distance check for pickup
+            player.item = 'carton'; // Award the item
+
+            // Remove the box and notify clients
+            lootboxes.splice(i, 1);
+            io.emit('lootboxPickedUp', box.id);
+
+            // Respawn the box after a delay
+            setTimeout(() => {
+                lootboxes.push(box);
+                io.emit('lootboxRespawned', box);
+            }, 10000); // 10 second respawn time
+
+            io.to(player.id).emit('itemPickedUp', player.item);
+            break;
+        }
+    }
+}
+
+function checkItemCollision(player) {
+    for (let i = activeItems.length - 1; i >= 0; i--) {
+        const item = activeItems[i];
+        if (item.type === 'carton') {
+            if (dist(player, item) < PLAYER_SIZE.width) { // Simple collision with carton
+                // Stop the player
+                player.speed = 0;
+                io.to(player.id).emit('playerStopped', player);
+
+                // Remove the item
+                activeItems.splice(i, 1);
+                io.emit('itemDestroyed', item.id);
+
+                // Player can move again after 1 second
+                setTimeout(() => {
+                    // This is tricky, as client can override. A better way is a server-side flag.
+                    // For now, we just rely on the client not sending updates if speed is 0.
+                }, 1000);
+                break;
+            }
+        }
+    }
+}
 
 function checkLaps(player) {
     const prevPos = { x: player.x - player.speed * Math.sin(player.angle), y: player.y + player.speed * Math.cos(player.angle) };

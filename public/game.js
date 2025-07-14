@@ -18,6 +18,10 @@ const kartHeight = 60;
 let players = {};
 let selfId = null;
 let circuit = null;
+let lootboxes = [];
+let activeItems = [];
+let lootboxAnimationTime = 0;
+let playerFrozen = false;
 
 socket.on('connect', () => {
     selfId = socket.id;
@@ -27,6 +31,7 @@ socket.on('connect', () => {
 socket.on('gameState', (gameState) => {
     players = gameState.players;
     circuit = gameState.circuit;
+    lootboxes = gameState.lootboxes;
     // Initialize physics properties for all players
     for(let id in players) {
         if (!players[id].speed) { // only init if not already set
@@ -58,6 +63,35 @@ socket.on('lapComplete', (data) => {
     }
 });
 
+socket.on('itemPickedUp', (item) => {
+    if(players[selfId]) {
+        players[selfId].item = item;
+    }
+});
+
+socket.on('lootboxPickedUp', (boxId) => {
+    lootboxes = lootboxes.filter(box => box.id !== boxId);
+});
+
+socket.on('lootboxRespawned', (box) => {
+    lootboxes.push(box);
+});
+
+socket.on('itemUsed', (item) => {
+    activeItems.push(item);
+});
+
+socket.on('itemDestroyed', (itemId) => {
+    activeItems = activeItems.filter(item => item.id !== itemId);
+});
+
+socket.on('playerStopped', (player) => {
+    if(player.id === selfId) {
+        playerFrozen = true;
+        setTimeout(() => playerFrozen = false, 1000);
+    }
+});
+
 function initPlayerPhysics(player) {
     player.speed = 0;
     // angle and position are now set by the server
@@ -74,6 +108,13 @@ window.addEventListener('keydown', (e) => {
     if (keys.hasOwnProperty(e.key)) {
         keys[e.key] = true;
     }
+    if (e.key === 'Enter') {
+        const player = players[selfId];
+        if (player && player.item) {
+            socket.emit('useItem', player.item);
+            player.item = null; // Clear item immediately on client
+        }
+    }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -83,6 +124,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 function updatePlayerState() {
+    if (playerFrozen) return;
     const player = players[selfId];
     if (!player) return;
 
@@ -291,6 +333,31 @@ function drawUI() {
 
     // Display Lap count
     ctx.fillText(`Lap: ${player.lap}`, 20, 20);
+
+    // Display item
+    if (player.item) {
+        ctx.font = '16px Arial';
+        ctx.fillText(`Item: ${player.item}`, 20, 50);
+    }
+}
+
+function drawLootboxes() {
+    lootboxAnimationTime += 0.1;
+    const boxSize = 30;
+    for (const box of lootboxes) {
+        ctx.save();
+        ctx.translate(box.x, box.y);
+        ctx.rotate(lootboxAnimationTime * 0.5);
+
+        // Rainbow effect
+        const hue = (lootboxAnimationTime * 10) % 360;
+        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.fillRect(-boxSize / 2, -boxSize / 2, boxSize, boxSize);
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-boxSize / 2, -boxSize / 2, boxSize, boxSize);
+        ctx.restore();
+    }
 }
 
 function draw() {
@@ -309,6 +376,8 @@ function draw() {
     ctx.fillStyle = '#6ab04c';
     ctx.fillRect(0, 0, circuit ? circuit.map_size.width : canvas.width, circuit ? circuit.map_size.height : canvas.height);
 
+    drawLootboxes();
+    drawActiveItems();
     drawCircuit();
 
     if (selfPlayer) {
@@ -326,6 +395,19 @@ function draw() {
     drawUI();
 
     requestAnimationFrame(draw);
+}
+
+function drawActiveItems() {
+    for (const item of activeItems) {
+        if (item.type === 'carton') {
+            const boxSize = 40;
+            ctx.fillStyle = '#D2B48C'; // Tan color for carton
+            ctx.fillRect(item.x - boxSize / 2, item.y - boxSize / 2, boxSize, boxSize);
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(item.x - boxSize / 2, item.y - boxSize / 2, boxSize, boxSize);
+        }
+    }
 }
 
 draw();

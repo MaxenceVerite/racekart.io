@@ -39,13 +39,17 @@ const circuits = [
             end: { x: 150, y: 175 }
         }),
         checkpoints: [
-            scaleLine({ start: { x: 700, y: 100 }, end: { x: 700, y: 200 } }),
-            scaleLine({ start: { x: 750, y: 425 }, end: { x: 650, y: 425 } }),
-            scaleLine({ start: { x: 100, y: 500 }, end: { x: 100, y: 400 } })
+            { line: scaleLine({ start: { x: 700, y: 100 }, end: { x: 700, y: 200 } }), position: { x: 700 * scale, y: 150 * scale } },
+            { line: scaleLine({ start: { x: 750, y: 425 }, end: { x: 650, y: 425 } }), position: { x: 700 * scale, y: 425 * scale } },
+            { line: scaleLine({ start: { x: 100, y: 500 }, end: { x: 100, y: 400 } }), position: { x: 100 * scale, y: 450 * scale } }
+        ],
+        lootboxes: [
+            { x: 400 * scale, y: 150 * scale },
+            { x: 400 * scale, y: 450 * scale }
         ]
     },
     {
-        name: "Circuit en Sinu",
+        name: "Circuit Sinueux",
         map_size: {width: 800 * scale, height: 600 * scale},
         startPosition: { x: 100 * scale, y: 100 * scale },
         startAngle: Math.PI / 2,
@@ -71,8 +75,13 @@ const circuits = [
             end: { x: 150, y: 125 }
         }),
         checkpoints: [
-            scaleLine({ start: { x: 750, y: 275 }, end: { x: 650, y: 275 } }),
-            scaleLine({ start: { x: 50, y: 475 }, end: { x: 150, y: 475 } })
+            { line: scaleLine({ start: { x: 750, y: 275 }, end: { x: 650, y: 275 } }), position: { x: 700 * scale, y: 275 * scale } },
+            { line: scaleLine({ start: { x: 50, y: 475 }, end: { x: 150, y: 475 } }), position: { x: 100 * scale, y: 475 * scale } }
+        ],
+        lootboxes: [
+            { x: 400 * scale, y: 100 * scale },
+            { x: 400 * scale, y: 300 * scale },
+            { x: 400 * scale, y: 500 * scale }
         ]
     }
 ];
