@@ -439,12 +439,12 @@ function drawActiveItems() {
             ctx.strokeStyle = '#8B4513';
             ctx.lineWidth = 2;
             ctx.strokeRect(item.x - boxSize / 2, item.y - boxSize / 2, boxSize, boxSize);
-        } else if (item.type === 'carapace_rouge') {
-            ctx.fillStyle = 'red';
+        } else if (item.type === 'pierre_bleue') {
+            ctx.fillStyle = 'deepskyblue';
             ctx.beginPath();
             ctx.arc(item.x, item.y, 15, 0, 2 * Math.PI);
             ctx.fill();
-            ctx.strokeStyle = 'darkred';
+            ctx.strokeStyle = 'blue';
             ctx.lineWidth = 2;
             ctx.stroke();
         }

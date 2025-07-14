@@ -260,7 +260,7 @@ io.on('connection', (socket) => {
             };
             activeItems.push(newItem);
             io.emit('itemUsed', newItem);
-        } else if (itemType === 'carapace_rouge') {
+        } else if (itemType === 'pierre_bleue') {
             // Find target (player in front)
             // This is a simple implementation based on who is next in the players object list
             // A real implementation would use race standings.
@@ -272,7 +272,7 @@ io.on('connection', (socket) => {
             if (targetId !== socket.id) {
                 const newItem = {
                     id: itemUID++,
-                    type: 'carapace_rouge',
+                    type: 'pierre_bleue',
                     x: player.x,
                     y: player.y,
                     targetId: targetId,
@@ -292,7 +292,7 @@ function checkLootboxPickup(player) {
     for (let i = lootboxes.length - 1; i >= 0; i--) {
         const box = lootboxes[i];
         if (dist(player, box) < PLAYER_SIZE.height) { // Simple distance check for pickup
-            const items = ['carton', 'carapace_rouge'];
+            const items = ['carton', 'pierre_bleue'];
             player.item = items[Math.floor(Math.random() * items.length)];
 
             // Remove the box and notify clients
@@ -329,7 +329,7 @@ function checkItemCollision(player) {
                 }, 1500);
                 break;
             }
-        } else if (item.type === 'carapace_rouge') {
+        } else if (item.type === 'pierre_bleue') {
             if (item.targetId === player.id && dist(player, item) < PLAYER_SIZE.width) {
                 player.speed = 0;
                 player.recovering = true;
@@ -378,23 +378,50 @@ server.listen(PORT, () => {
 });
 
 setInterval(() => {
-    updateActiveItems();
-    io.emit('itemsUpdate', activeItems);
+    if(updateActiveItems()) {
+        io.emit('itemsUpdate', activeItems);
+    }
 }, 1000 / 60); // 60 times per second
 
 function updateActiveItems() {
+    let updated = false;
     for (const item of activeItems) {
-        if (item.type === 'carapace_rouge') {
+        if (item.type === 'pierre_bleue') {
+            updated = true;
             const target = players[item.targetId];
             if (!target) {
-                // Target disconnected, destroy shell
                 activeItems = activeItems.filter(i => i.id !== item.id);
                 continue;
             }
 
+            // Simple path following
+            const path = currentCircuit.path;
+            let closestPoint = null;
+            let minDistance = Infinity;
+
+            for(let i = 0; i < path.length -1; i++) {
+                const p = closestPointOnLine(item, path[i], path[i+1]);
+                const d = dist(item, p);
+                if (d < minDistance) {
+                    minDistance = d;
+                    closestPoint = p;
+                }
+            }
+
+            const angleToPath = Math.atan2(closestPoint.y - item.y, closestPoint.x - item.x);
             const angleToTarget = Math.atan2(target.y - item.y, target.x - item.x);
-            item.x += item.speed * Math.cos(angleToTarget);
-            item.y += item.speed * Math.sin(angleToTarget);
+
+            // If close to target, go straight for it
+            const distanceToTarget = dist(item, target);
+            let finalAngle = angleToPath;
+            if(distanceToTarget < 200) {
+                finalAngle = angleToTarget;
+            }
+
+
+            item.x += item.speed * Math.cos(finalAngle);
+            item.y += item.speed * Math.sin(finalAngle);
         }
     }
+    return updated;
 }
