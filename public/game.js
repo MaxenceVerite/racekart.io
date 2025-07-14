@@ -78,7 +78,7 @@ socket.on('lootboxRespawned', (box) => {
 });
 
 socket.on('itemUsed', (item) => {
-    activeItems.push(item);
+    // activeItems.push(item);
 });
 
 socket.on('itemDestroyed', (itemId) => {
@@ -447,6 +447,16 @@ function drawActiveItems() {
             ctx.strokeStyle = 'blue';
             ctx.lineWidth = 2;
             ctx.stroke();
+        } else if (item.type === 'grappin') {
+            ctx.strokeStyle = 'gray';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            const player = players[item.playerId];
+            if(player) {
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(item.x, item.y);
+                ctx.stroke();
+            }
         }
     }
 }

@@ -281,6 +281,18 @@ io.on('connection', (socket) => {
                 activeItems.push(newItem);
                 io.emit('itemUsed', newItem);
             }
+        } else if (itemType === 'grappin') {
+            const newItem = {
+                id: itemUID++,
+                type: 'grappin',
+                x: player.x,
+                y: player.y,
+                angle: player.angle,
+                speed: 15,
+                playerId: player.id
+            };
+            activeItems.push(newItem);
+            io.emit('itemUsed', newItem);
         }
         player.item = null;
     });
@@ -292,7 +304,7 @@ function checkLootboxPickup(player) {
     for (let i = lootboxes.length - 1; i >= 0; i--) {
         const box = lootboxes[i];
         if (dist(player, box) < PLAYER_SIZE.height) { // Simple distance check for pickup
-            const items = ['carton', 'pierre_bleue'];
+            const items = ['carton', 'pierre_bleue', 'grappin'];
             player.item = items[Math.floor(Math.random() * items.length)];
 
             // Remove the box and notify clients
@@ -394,6 +406,40 @@ function updateActiveItems() {
                         io.emit('playerRecovered', { id: target.id, recovering: false });
                     }, 1500);
                 }
+                activeItems.splice(i, 1);
+                io.emit('itemDestroyed', item.id);
+            }
+        } else if (item.type === 'grappin') {
+            item.x += item.speed * Math.sin(item.angle);
+            item.y -= item.speed * Math.cos(item.angle);
+
+            for (const playerId in players) {
+                if (playerId !== item.playerId) {
+                    const player = players[playerId];
+                    if (dist(item, player) < PLAYER_SIZE.width) {
+                        const sourcePlayer = players[item.playerId];
+                        const targetPlayer = player;
+
+                        // Swap positions
+                        const tempX = sourcePlayer.x;
+                        const tempY = sourcePlayer.y;
+                        sourcePlayer.x = targetPlayer.x;
+                        sourcePlayer.y = targetPlayer.y;
+                        targetPlayer.x = tempX;
+                        targetPlayer.y = tempY;
+
+                        io.emit('playerMoved', sourcePlayer);
+                        io.emit('playerMoved', targetPlayer);
+
+                        activeItems.splice(i, 1);
+                        io.emit('itemDestroyed', item.id);
+                        break;
+                    }
+                }
+            }
+
+            // Remove grappin if it goes off screen
+            if (item.x < 0 || item.x > currentCircuit.map_size.width || item.y < 0 || item.y > currentCircuit.map_size.height) {
                 activeItems.splice(i, 1);
                 io.emit('itemDestroyed', item.id);
             }
