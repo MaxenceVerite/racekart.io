@@ -363,11 +363,13 @@ function drawMinimap() {
 const itemImages = {
     'carton': new Image(),
     'pierre_bleue': new Image(),
-    'grappin': new Image()
+    'grappin': new Image(),
+    'oeuf_au_plat': new Image()
 };
 itemImages.carton.src = '/assets/carton.png';
 itemImages.pierre_bleue.src = '/assets/pierre_bleue.png';
 itemImages.grappin.src = '/assets/grappin.png';
+itemImages.oeuf_au_plat.src = '/assets/oeuf_au_plat.png';
 
 
 function drawUI() {
