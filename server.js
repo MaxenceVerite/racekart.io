@@ -7,13 +7,27 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
-const PLAYER_SIZE = { width: 20, height: 30 }; // Matching client-side approx.
+const PLAYER_SIZE = { width: 40, height: 60 };
 const circuits = require('./circuits');
-const currentCircuit = circuits[0]; // Start with the first circuit
+const currentCircuit = circuits[0];
 
 app.use(express.static('public'));
 
 let players = {};
+
+// --- Vector Math Helpers ---
+function closestPointOnLine(p, a, b) {
+    const ap = { x: p.x - a.x, y: p.y - a.y };
+    const ab = { x: b.x - a.x, y: b.y - a.y };
+    const magAb = ab.x * ab.x + ab.y * ab.y;
+    let t = (ap.x * ab.x + ap.y * ab.y) / magAb;
+    t = Math.max(0, Math.min(1, t));
+    return { x: a.x + t * ab.x, y: a.y + t * ab.y };
+}
+
+function dist(p1, p2) {
+    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+}
 
 function isPointInPolygon(point, polygon) {
     let x = point.x, y = point.y;
@@ -29,22 +43,52 @@ function isPointInPolygon(point, polygon) {
     return inside;
 }
 
-function checkWallCollisions(player) {
+function applyOffTrackPenalty(player) {
     const isOnTrack = isPointInPolygon(player, currentCircuit.boundaries.outer) &&
                       !isPointInPolygon(player, currentCircuit.boundaries.inner);
-
     if (!isOnTrack) {
-        // Player is off-track, find the closest point on the boundary to push them back
-        const prevX = player.x - player.speed * Math.sin(player.angle);
-        const prevY = player.y + player.speed * Math.cos(player.angle);
-
-        player.x = prevX;
-        player.y = prevY;
-
-        player.speed = -player.speed * 0.4; // Bounce back with speed loss
+        player.speed *= 0.95; // Constant friction/drag on grass
     }
 }
 
+
+function checkWallCollisions(player) {
+    const boundaries = [...currentCircuit.boundaries.outer, ...currentCircuit.boundaries.inner];
+    let collision = false;
+
+    for (let i = 0; i < boundaries.length - 1; i++) {
+        const p1 = boundaries[i];
+        const p2 = boundaries[i+1];
+
+        const closestPoint = closestPointOnLine(player, p1, p2);
+        const distanceToWall = dist(player, closestPoint);
+
+        if (distanceToWall < PLAYER_SIZE.height / 2) {
+            collision = true;
+
+            // Move player back to the point of collision
+            const overlap = (PLAYER_SIZE.height / 2) - distanceToWall;
+            const wallVector = { x: p2.x - p1.x, y: p2.y - p1.y };
+            const wallAngle = Math.atan2(wallVector.y, wallVector.x);
+
+            // Push player out of the wall along the normal
+            const normalAngle = wallAngle - Math.PI / 2;
+            player.x += overlap * Math.cos(normalAngle);
+            player.y += overlap * Math.sin(normalAngle);
+
+            // Calculate reflection
+            const v = { x: player.speed * Math.sin(player.angle), y: -player.speed * Math.cos(player.angle) };
+            const n = { x: Math.cos(normalAngle), y: Math.sin(normalAngle) };
+            const dot = v.x * n.x + v.y * n.y;
+            const v_reflect = { x: v.x - 2 * dot * n.x, y: v.y - 2 * dot * n.y };
+
+            player.angle = Math.atan2(v_reflect.x, -v_reflect.y);
+            player.speed *= 0.6; // Speed loss on impact
+            break;
+        }
+    }
+    return collision;
+}
 
 function checkCollisions(movedPlayer) {
     for (const id in players) {
@@ -55,26 +99,24 @@ function checkCollisions(movedPlayer) {
         const dx = otherPlayer.x - movedPlayer.x;
         const dy = otherPlayer.y - movedPlayer.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const minDistance = PLAYER_SIZE.height; // Use height for a more circular-like collision box
+        const minDistance = PLAYER_SIZE.height;
 
         if (distance < minDistance) {
             const angle = Math.atan2(dy, dx);
             const overlap = minDistance - distance;
 
-            // Separate players to prevent sticking
             movedPlayer.x -= (overlap / 2) * Math.cos(angle);
             movedPlayer.y -= (overlap / 2) * Math.sin(angle);
             otherPlayer.x += (overlap / 2) * Math.cos(angle);
             otherPlayer.y += (overlap / 2) * Math.sin(angle);
 
-            // Elastic collision physics
             const v1 = { x: movedPlayer.speed * Math.sin(movedPlayer.angle), y: -movedPlayer.speed * Math.cos(movedPlayer.angle) };
             const v2 = { x: otherPlayer.speed * Math.sin(otherPlayer.angle), y: -otherPlayer.speed * Math.cos(otherPlayer.angle) };
 
-            const nx = dx / distance; // Normal x
-            const ny = dy / distance; // Normal y
+            const nx = dx / distance;
+            const ny = dy / distance;
 
-            const p = 2 * (v1.x * nx + v1.y * ny - v2.x * nx - v2.y * ny) / 2; // Assuming equal mass
+            const p = 2 * (v1.x * nx + v1.y * ny - v2.x * nx - v2.y * ny) / 2;
 
             const v1_new_x = v1.x - p * nx;
             const v1_new_y = v1.y - p * ny;
@@ -86,13 +128,11 @@ function checkCollisions(movedPlayer) {
             otherPlayer.speed = Math.sqrt(v2_new_x**2 + v2_new_y**2);
             otherPlayer.angle = Math.atan2(v2_new_x, -v2_new_y);
 
-            // Notify both players of the position and physics correction
             io.to(movedPlayer.id).emit('playerMoved', movedPlayer);
             io.to(otherPlayer.id).emit('playerMoved', otherPlayer);
         }
     }
 }
-
 
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
@@ -108,10 +148,7 @@ io.on('connection', (socket) => {
         checkpoint: 0
     };
 
-    // Send circuit data and current players
     socket.emit('gameState', { players: players, circuit: currentCircuit });
-
-    // Update all other players of the new player
     socket.broadcast.emit('newPlayer', players[socket.id]);
 
     socket.on('disconnect', () => {
@@ -130,17 +167,14 @@ io.on('connection', (socket) => {
         player.steerAngle = movementData.steerAngle;
         player.speed = movementData.speed;
 
-
-        // Server-side checks
         checkWallCollisions(player);
         checkCollisions(player);
+        applyOffTrackPenalty(player);
         checkLaps(player);
 
-        // World boundaries
         player.x = Math.max(0, Math.min(currentCircuit.map_size.width, player.x));
         player.y = Math.max(0, Math.min(currentCircuit.map_size.height, player.y));
 
-        // Broadcast the potentially corrected position and speed
         socket.broadcast.emit('playerMoved', player);
     });
 });
@@ -148,34 +182,27 @@ io.on('connection', (socket) => {
 function checkLaps(player) {
     const prevPos = { x: player.x - player.speed * Math.sin(player.angle), y: player.y + player.speed * Math.cos(player.angle) };
 
-    // Check for crossing checkpoints
     const nextCheckpointIndex = player.checkpoint;
     if (nextCheckpointIndex < currentCircuit.checkpoints.length) {
         const checkpoint = currentCircuit.checkpoints[nextCheckpointIndex];
         if (line_intersect(prevPos.x, prevPos.y, player.x, player.y, checkpoint.start.x, checkpoint.start.y, checkpoint.end.x, checkpoint.end.y)) {
             player.checkpoint++;
-            console.log(`Player ${player.id} passed checkpoint ${player.checkpoint}`);
         }
     }
 
-    // Check for crossing finish line
-    if (player.checkpoint === currentCircuit.checkpoints.length) { // Must have passed all checkpoints
+    if (player.checkpoint === currentCircuit.checkpoints.length) {
         const finishLine = currentCircuit.finishLine;
         if (line_intersect(prevPos.x, prevPos.y, player.x, player.y, finishLine.start.x, finishLine.start.y, finishLine.end.x, finishLine.end.y)) {
             player.lap++;
-            player.checkpoint = 0; // Reset for next lap
-            console.log(`Player ${player.id} completed lap ${player.lap}`);
+            player.checkpoint = 0;
             io.emit('lapComplete', { id: player.id, lap: player.lap });
         }
     }
 }
 
-// Line intercept math helper
 function line_intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
     var ua, ub, den = (y4 - y3)*(x2 - x1) - (x4 - x3)*(y2 - y1);
-    if (den === 0) {
-        return null;
-    }
+    if (den === 0) return null;
     ua = ((x4 - x3)*(y1 - y3) - (y4 - y3)*(x1 - x3))/den;
     ub = ((x2 - x1)*(y1 - y3) - (y2 - y1)*(x1 - x3))/den;
     return (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1);
