@@ -123,7 +123,7 @@ window.addEventListener('keydown', (e) => {
     if (keys.hasOwnProperty(e.key)) {
         keys[e.key] = true;
     }
-    if (e.key === 'Enter') {
+    if (e.code === 'Space') {
         const player = players[selfId];
         if (player && player.item) {
             socket.emit('useItem', player.item);
@@ -147,50 +147,56 @@ function updatePlayerState() {
     const acceleration = 0.04;
     const deceleration = 0.05;
     const friction = 0.015;
+    const offroadFriction = 0.1;
     const maxSpeed = 3.5;
     const turnSpeed = 0.03; // radians
 
     let moved = false;
 
-    // Acceleration and Braking
+    // Vérifie si le joueur est sur la route
+    const onTrack = isOnTrack(player.x, player.y, circuit.path, 220);
+    const currentFriction = onTrack ? friction : offroadFriction;
+
+    // Accélération et frein
     if (keys.ArrowUp) {
         player.speed = Math.min(maxSpeed, player.speed + acceleration);
     }
     if (keys.ArrowDown) {
-        player.speed = Math.max(-maxSpeed / 2, player.speed - deceleration); // Slower reverse
+        player.speed = Math.max(-maxSpeed / 2, player.speed - deceleration); // reverse plus lent
     }
 
-    // Apply friction
-    if (player.speed > 0) {
-        player.speed -= friction;
-    } else if (player.speed < 0) {
-        player.speed += friction;
+    // Appliquer le frottement seulement si on n'accélère pas
+    const accelerating = keys.ArrowUp || keys.ArrowDown;
+    if (!accelerating) {
+        if (player.speed > 0) {
+            player.speed = Math.max(0, player.speed - currentFriction);
+        } else if (player.speed < 0) {
+            player.speed = Math.min(0, player.speed + currentFriction);
+        }
     }
-    // Stop the car if speed is very low
+
+    // Stop net si vitesse trop faible
     if (Math.abs(player.speed) < friction) {
         player.speed = 0;
     }
 
-
-    // Steering (only when moving)
+    // Direction (uniquement si on bouge)
     if (player.speed !== 0) {
         if (keys.ArrowLeft) {
             player.angle -= turnSpeed;
-            player.steerAngle = -0.3; // Visual steer
+            player.steerAngle = -0.3;
             moved = true;
         }
         if (keys.ArrowRight) {
             player.angle += turnSpeed;
-            player.steerAngle = 0.3; // Visual steer
+            player.steerAngle = 0.3;
             moved = true;
         }
-    }
-    if (!keys.ArrowLeft && !keys.ArrowRight) {
+    } else {
         player.steerAngle = 0;
     }
 
-
-    // Update position based on speed and angle
+    // Déplacement selon angle
     player.x += player.speed * Math.sin(player.angle);
     player.y -= player.speed * Math.cos(player.angle);
 
@@ -198,8 +204,7 @@ function updatePlayerState() {
         moved = true;
     }
 
-
-    // Emit changes to the server
+    // Envoyer au serveur si on a bougé
     if (moved) {
         socket.emit('playerMovement', {
             x: player.x,
@@ -210,6 +215,7 @@ function updatePlayerState() {
         });
     }
 }
+
 
 function drawCircuit() {
     if (!circuit) return;
@@ -469,5 +475,31 @@ function drawActiveItems() {
         }
     }
 }
+
+function distanceToSegment(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    if (dx === 0 && dy === 0) {
+        // Le segment est un point
+        return Math.hypot(px - x1, py - y1);
+    }
+
+    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+    return Math.hypot(px - projX, py - projY);
+}
+
+function isOnTrack(x, y, path, trackWidth) {
+    const halfWidth = trackWidth / 2;
+    for (let i = 0; i < path.length - 1; i++) {
+        const p1 = path[i];
+        const p2 = path[i + 1];
+        const d = distanceToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+        if (d <= halfWidth) return true;
+    }
+    return false;
+}
+
 
 draw();
