@@ -223,7 +223,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         delete players[socket.id];
-        io.emit('disconnect', socket.id);
+        io.emit('playerDisconnected', socket.id);
     });
 
     socket.on('playerMovement', function (movementData) {
@@ -329,19 +329,6 @@ function checkItemCollision(player) {
                 }, 1500);
                 break;
             }
-        } else if (item.type === 'pierre_bleue') {
-            if (item.targetId === player.id && dist(player, item) < PLAYER_SIZE.width) {
-                player.speed = 0;
-                player.recovering = true;
-                io.emit('playerHit', { id: player.id, recovering: true });
-                activeItems.splice(i, 1);
-                io.emit('itemDestroyed', item.id);
-                setTimeout(() => {
-                    player.recovering = false;
-                    io.emit('playerRecovered', { id: player.id, recovering: false });
-                }, 1500);
-                break;
-            }
         }
     }
 }
@@ -418,9 +405,23 @@ function updateActiveItems() {
                 finalAngle = angleToTarget;
             }
 
-
             item.x += item.speed * Math.cos(finalAngle);
             item.y += item.speed * Math.sin(finalAngle);
+
+            // Check for collision with target
+            if (dist(item, target) < PLAYER_SIZE.width) {
+                if (!target.recovering) {
+                    target.speed = 0;
+                    target.recovering = true;
+                    io.emit('playerHit', { id: target.id, recovering: true });
+                    setTimeout(() => {
+                        target.recovering = false;
+                        io.emit('playerRecovered', { id: target.id, recovering: false });
+                    }, 1500);
+                }
+                activeItems = activeItems.filter(i => i.id !== item.id);
+                io.emit('itemDestroyed', item.id);
+            }
         }
     }
     return updated;

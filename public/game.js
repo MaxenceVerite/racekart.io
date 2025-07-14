@@ -47,7 +47,7 @@ socket.on('newPlayer', (playerInfo) => {
     players[playerInfo.id] = playerInfo;
 });
 
-socket.on('disconnect', (playerId) => {
+socket.on('playerDisconnected', (playerId) => {
     delete players[playerId];
 });
 
