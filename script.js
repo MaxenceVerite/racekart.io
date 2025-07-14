@@ -24,8 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.save();
             ctx.translate(this.x, this.y);
             ctx.rotate(this.angle);
-            ctx.fillStyle = this.color;
-            ctx.fillRect(this.width / -2, this.height / -2, this.width, this.height);
+            ctx.font = "20px Arial";
+            ctx.fillText("🏎️", -10, 10);
             ctx.restore();
         }
     }
@@ -43,8 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let player;
-    let otherPlayers = {};
-    let socket;
 
     function gameLoop() {
         update();
@@ -52,20 +50,37 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(gameLoop);
     }
 
+    let mouse = { x: 0, y: 0 };
+
+    document.addEventListener('mousemove', (e) => {
+        mouse.x = e.clientX - gameCanvas.getBoundingClientRect().left;
+        mouse.y = e.clientY - gameCanvas.getBoundingClientRect().top;
+    });
+
     function update() {
-        player.angle += player.moveAngle * Math.PI / 180;
+        let dx = mouse.x - gameCanvas.width / 2;
+        let dy = mouse.y - gameCanvas.height / 2;
+        let targetAngle = Math.atan2(dx, -dy);
+        player.angle += (targetAngle - player.angle) * 0.1;
+
+        if (keys['ArrowUp']) {
+            player.speed += 0.1;
+        } else if (keys['ArrowDown']) {
+            player.speed -= 0.1;
+        } else {
+            player.speed *= 0.95;
+        }
+
         player.x += player.speed * Math.sin(player.angle);
         player.y -= player.speed * Math.cos(player.angle);
-
-        socket.emit('player movement', { x: player.x, y: player.y, angle: player.angle });
     }
 
     function draw() {
+        ctx.save();
+        ctx.translate(gameCanvas.width / 2 - player.x, gameCanvas.height / 2 - player.y);
         drawMap();
         player.draw();
-        for (let id in otherPlayers) {
-            otherPlayers[id].draw();
-        }
+        ctx.restore();
         drawMinimap();
     }
 
@@ -73,70 +88,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const minimapSize = 150;
         const minimapX = gameCanvas.width - minimapSize - 10;
         const minimapY = gameCanvas.height - minimapSize - 10;
-        const scale = minimapSize / Math.max(gameCanvas.width, gameCanvas.height);
+        const scale = minimapSize / 2000; // Assuming map size is 2000x2000
 
         ctx.save();
         ctx.translate(minimapX, minimapY);
         ctx.scale(scale, scale);
 
         drawMap();
-
         player.draw();
-        for (let id in otherPlayers) {
-            otherPlayers[id].draw();
-        }
 
         ctx.restore();
     }
 
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowUp') player.speed = 5;
-        if (e.key === 'ArrowDown') player.speed = -2;
-        if (e.key === 'ArrowLeft') player.moveAngle = -3;
-        if (e.key === 'ArrowRight') player.moveAngle = 3;
-    });
-
-    document.addEventListener('keyup', (e) => {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') player.speed = 0;
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') player.moveAngle = 0;
-    });
+    let keys = {};
+    document.addEventListener('keydown', (e) => keys[e.key] = true);
+    document.addEventListener('keyup', (e) => keys[e.key] = false);
 
     connectBtn.addEventListener('click', () => {
         const username = usernameInput.value;
         if (username) {
             loginContainer.style.display = 'none';
             gameCanvas.style.display = 'block';
-
-            socket = io();
-
-            socket.on('currentPlayers', (players) => {
-                Object.keys(players).forEach((id) => {
-                    if (id === socket.id) {
-                        player = new Player(players[id].x, players[id].y, players[id].color);
-                    } else {
-                        otherPlayers[id] = new Player(players[id].x, players[id].y, players[id].color);
-                    }
-                });
-            });
-
-            socket.on('new player', (playerInfo) => {
-                otherPlayers[playerInfo.id] = new Player(playerInfo.x, playerInfo.y, playerInfo.color);
-            });
-
-            socket.on('player moved', (playerInfo) => {
-                if (otherPlayers[playerInfo.playerId]) {
-                    otherPlayers[playerInfo.playerId].x = playerInfo.x;
-                    otherPlayers[playerInfo.playerId].y = playerInfo.y;
-                    otherPlayers[playerInfo.playerId].angle = playerInfo.angle;
-                }
-            });
-
-            socket.on('player disconnected', (playerId) => {
-                delete otherPlayers[playerId];
-            });
-
-            socket.emit('new player', username);
-
+            player = new Player(400, 300, 'red');
             gameLoop();
         }
     });
