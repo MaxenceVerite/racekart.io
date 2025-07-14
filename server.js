@@ -276,7 +276,7 @@ io.on('connection', (socket) => {
                     x: player.x,
                     y: player.y,
                     targetId: targetId,
-                    speed: 7 // Speed of the shell
+                    speed: 12 // Speed of the shell
                 };
                 activeItems.push(newItem);
                 io.emit('itemUsed', newItem);
@@ -288,7 +288,7 @@ io.on('connection', (socket) => {
                 x: player.x,
                 y: player.y,
                 angle: player.angle,
-                speed: 15,
+                speed: 20,
                 playerId: player.id
             };
             activeItems.push(newItem);
@@ -416,7 +416,7 @@ function updateActiveItems() {
             for (const playerId in players) {
                 if (playerId !== item.playerId) {
                     const player = players[playerId];
-                    if (dist(item, player) < PLAYER_SIZE.width) {
+                    if (dist(item, player) < PLAYER_SIZE.width + 20) {
                         const sourcePlayer = players[item.playerId];
                         const targetPlayer = player;
 
