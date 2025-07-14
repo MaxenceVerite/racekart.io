@@ -29,14 +29,22 @@ function isPointInPolygon(point, polygon) {
     return inside;
 }
 
-function checkTrackBoundaries(player) {
+function checkWallCollisions(player) {
     const isOnTrack = isPointInPolygon(player, currentCircuit.boundaries.outer) &&
                       !isPointInPolygon(player, currentCircuit.boundaries.inner);
 
     if (!isOnTrack) {
-        player.speed = Math.min(player.speed, 1.5); // Cap speed when off-track
+        // Player is off-track, find the closest point on the boundary to push them back
+        const prevX = player.x - player.speed * Math.sin(player.angle);
+        const prevY = player.y + player.speed * Math.cos(player.angle);
+
+        player.x = prevX;
+        player.y = prevY;
+
+        player.speed = -player.speed * 0.4; // Bounce back with speed loss
     }
 }
+
 
 function checkCollisions(movedPlayer) {
     for (const id in players) {
@@ -47,20 +55,38 @@ function checkCollisions(movedPlayer) {
         const dx = otherPlayer.x - movedPlayer.x;
         const dy = otherPlayer.y - movedPlayer.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const minDistance = (PLAYER_SIZE.width + PLAYER_SIZE.height) / 2;
+        const minDistance = PLAYER_SIZE.height; // Use height for a more circular-like collision box
 
         if (distance < minDistance) {
-            const overlap = minDistance - distance;
             const angle = Math.atan2(dy, dx);
+            const overlap = minDistance - distance;
 
-            const moveX = (overlap / 2) * Math.cos(angle);
-            const moveY = (overlap / 2) * Math.sin(angle);
+            // Separate players to prevent sticking
+            movedPlayer.x -= (overlap / 2) * Math.cos(angle);
+            movedPlayer.y -= (overlap / 2) * Math.sin(angle);
+            otherPlayer.x += (overlap / 2) * Math.cos(angle);
+            otherPlayer.y += (overlap / 2) * Math.sin(angle);
 
-            movedPlayer.x -= moveX;
-            movedPlayer.y -= moveY;
-            otherPlayer.x += moveX;
-            otherPlayer.y += moveY;
+            // Elastic collision physics
+            const v1 = { x: movedPlayer.speed * Math.sin(movedPlayer.angle), y: -movedPlayer.speed * Math.cos(movedPlayer.angle) };
+            const v2 = { x: otherPlayer.speed * Math.sin(otherPlayer.angle), y: -otherPlayer.speed * Math.cos(otherPlayer.angle) };
 
+            const nx = dx / distance; // Normal x
+            const ny = dy / distance; // Normal y
+
+            const p = 2 * (v1.x * nx + v1.y * ny - v2.x * nx - v2.y * ny) / 2; // Assuming equal mass
+
+            const v1_new_x = v1.x - p * nx;
+            const v1_new_y = v1.y - p * ny;
+            const v2_new_x = v2.x + p * nx;
+            const v2_new_y = v2.y + p * ny;
+
+            movedPlayer.speed = Math.sqrt(v1_new_x**2 + v1_new_y**2);
+            movedPlayer.angle = Math.atan2(v1_new_x, -v1_new_y);
+            otherPlayer.speed = Math.sqrt(v2_new_x**2 + v2_new_y**2);
+            otherPlayer.angle = Math.atan2(v2_new_x, -v2_new_y);
+
+            // Notify both players of the position and physics correction
             io.to(movedPlayer.id).emit('playerMoved', movedPlayer);
             io.to(otherPlayer.id).emit('playerMoved', otherPlayer);
         }
@@ -106,7 +132,7 @@ io.on('connection', (socket) => {
 
 
         // Server-side checks
-        checkTrackBoundaries(player);
+        checkWallCollisions(player);
         checkCollisions(player);
         checkLaps(player);
 
