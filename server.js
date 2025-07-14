@@ -215,7 +215,8 @@ io.on('connection', (socket) => {
         steerAngle: 0,
         lap: 0,
         checkpoint: 0,
-        item: null
+        item: null,
+        boosted: false
     };
     socket.emit('gameState', { players, circuit: currentCircuit, lootboxes });
     socket.broadcast.emit('newPlayer', players[socket.id]);
@@ -289,10 +290,26 @@ io.on('connection', (socket) => {
                 y: player.y,
                 angle: player.angle,
                 speed: 20,
-                playerId: player.id
+                playerId: player.id,
+                createdAt: Date.now()
             };
             activeItems.push(newItem);
             io.emit('itemUsed', newItem);
+        } else if (itemType === 'oeuf_au_plat') {
+            player.speed = 5;
+            player.boosted = true;
+            setTimeout(() => {
+                if (player.speed > 3.5) {
+                    player.speed = 3.5;
+                }
+                player.boosted = false;
+            }, 2000);
+        } else if (itemType === 'inverseur') {
+            for (const id in players) {
+                if (id !== socket.id) {
+                    io.to(id).emit('controlsInverted');
+                }
+            }
         }
         player.item = null;
     });
@@ -304,7 +321,7 @@ function checkLootboxPickup(player) {
     for (let i = lootboxes.length - 1; i >= 0; i--) {
         const box = lootboxes[i];
         if (dist(player, box) < PLAYER_SIZE.height) { // Simple distance check for pickup
-            const items = ['carton', 'pierre_bleue', 'grappin'];
+            const items = ['carton', 'pierre_bleue', 'grappin', 'oeuf_au_plat', 'inverseur'];
             player.item = items[Math.floor(Math.random() * items.length)];
 
             // Remove the box and notify clients
@@ -438,8 +455,8 @@ function updateActiveItems() {
                 }
             }
 
-            // Remove grappin if it goes off screen
-            if (item.x < 0 || item.x > currentCircuit.map_size.width || item.y < 0 || item.y > currentCircuit.map_size.height) {
+            // Remove grappin if it goes off screen or after 2 seconds
+            if (item.x < 0 || item.x > currentCircuit.map_size.width || item.y < 0 || item.y > currentCircuit.map_size.height || Date.now() - item.createdAt > 2000) {
                 activeItems.splice(i, 1);
                 io.emit('itemDestroyed', item.id);
             }
