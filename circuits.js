@@ -64,8 +64,11 @@ const circuits = [
         ],
         lootboxes: [
             { x: 400 * scale, y: 150 * scale },
+            { x: 650 * scale, y: 225 * scale },
             { x: 475 * scale, y: 525 * scale },
             { x: 850 * scale, y: 500 * scale },
+            { x: 850 * scale, y: 700 * scale },
+            { x: 400 * scale, y: 750 * scale },
             { x: 150 * scale, y: 450 * scale }
         ]
     },

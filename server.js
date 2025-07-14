@@ -108,7 +108,7 @@ function applyOffTrackPenalty(player) {
     if (onShortcut) {
         player.speed *= 0.98; // Slight speed reduction for shortcut
     } else if (!onMainTrack) {
-        player.speed = Math.min(player.speed, 1.0); // Heavy penalty for grass
+        player.speed = Math.min(player.speed, 0.5); // Heavy penalty for grass
     }
 }
 
@@ -365,9 +365,8 @@ server.listen(PORT, () => {
 });
 
 setInterval(() => {
-    if(updateActiveItems()) {
-        io.emit('itemsUpdate', activeItems);
-    }
+    updateActiveItems();
+    io.emit('itemsUpdate', activeItems);
 }, 1000 / 60); // 60 times per second
 
 function updateActiveItems() {

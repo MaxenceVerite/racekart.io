@@ -215,7 +215,7 @@ function drawCircuit() {
     if (!circuit) return;
 
     ctx.strokeStyle = '#a0a0a0';
-    ctx.lineWidth = 180; // Width of the road
+    ctx.lineWidth = 220; // Width of the road
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
