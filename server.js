@@ -288,18 +288,20 @@ io.on('connection', (socket) => {
                 x: player.x,
                 y: player.y,
                 angle: player.angle,
-                speed: 50,
+                speed: 20,
                 playerId: player.id,
                 createdAt: Date.now()
             };
             activeItems.push(newItem);
             io.emit('itemUsed', newItem);
         } else if (itemType === 'oeuf_au_plat') {
-            player.speed = 4.55;
+            player.speed = 5;
+            player.boosted = true;
             setTimeout(() => {
                 if (player.speed > 3.5) {
                     player.speed = 3.5;
                 }
+                player.boosted = false;
             }, 2000);
         }
         player.item = null;

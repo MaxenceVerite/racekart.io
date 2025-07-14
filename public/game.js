@@ -123,7 +123,7 @@ window.addEventListener('keydown', (e) => {
     if (keys.hasOwnProperty(e.key)) {
         keys[e.key] = true;
     }
-    if (e.code === 'Space') {
+    if (e.key === 'Enter') {
         const player = players[selfId];
         if (player && player.item) {
             socket.emit('useItem', player.item);
@@ -147,56 +147,50 @@ function updatePlayerState() {
     const acceleration = 0.04;
     const deceleration = 0.05;
     const friction = 0.015;
-    const offroadFriction = 0.1;
     const maxSpeed = 3.5;
     const turnSpeed = 0.03; // radians
 
     let moved = false;
 
-    // Vérifie si le joueur est sur la route
-    const onTrack = isOnTrack(player.x, player.y, circuit.path, 220);
-    const currentFriction = onTrack ? friction : offroadFriction;
-
-    // Accélération et frein
+    // Acceleration and Braking
     if (keys.ArrowUp) {
         player.speed = Math.min(maxSpeed, player.speed + acceleration);
     }
     if (keys.ArrowDown) {
-        player.speed = Math.max(-maxSpeed / 2, player.speed - deceleration); // reverse plus lent
+        player.speed = Math.max(-maxSpeed / 2, player.speed - deceleration); // Slower reverse
     }
 
-    // Appliquer le frottement seulement si on n'accélère pas
-    const accelerating = keys.ArrowUp || keys.ArrowDown;
-    if (!accelerating) {
-        if (player.speed > 0) {
-            player.speed = Math.max(0, player.speed - currentFriction);
-        } else if (player.speed < 0) {
-            player.speed = Math.min(0, player.speed + currentFriction);
-        }
+    // Apply friction
+    if (player.speed > 0) {
+        player.speed -= friction;
+    } else if (player.speed < 0) {
+        player.speed += friction;
     }
-
-    // Stop net si vitesse trop faible
+    // Stop the car if speed is very low
     if (Math.abs(player.speed) < friction) {
         player.speed = 0;
     }
 
-    // Direction (uniquement si on bouge)
+
+    // Steering (only when moving)
     if (player.speed !== 0) {
         if (keys.ArrowLeft) {
             player.angle -= turnSpeed;
-            player.steerAngle = -0.3;
+            player.steerAngle = -0.3; // Visual steer
             moved = true;
         }
         if (keys.ArrowRight) {
             player.angle += turnSpeed;
-            player.steerAngle = 0.3;
+            player.steerAngle = 0.3; // Visual steer
             moved = true;
         }
-    } else {
+    }
+    if (!keys.ArrowLeft && !keys.ArrowRight) {
         player.steerAngle = 0;
     }
 
-    // Déplacement selon angle
+
+    // Update position based on speed and angle
     player.x += player.speed * Math.sin(player.angle);
     player.y -= player.speed * Math.cos(player.angle);
 
@@ -204,7 +198,8 @@ function updatePlayerState() {
         moved = true;
     }
 
-    // Envoyer au serveur si on a bougé
+
+    // Emit changes to the server
     if (moved) {
         socket.emit('playerMovement', {
             x: player.x,
@@ -215,7 +210,6 @@ function updatePlayerState() {
         });
     }
 }
-
 
 function drawCircuit() {
     if (!circuit) return;
@@ -257,7 +251,7 @@ function drawCircuit() {
 
 
 function drawKart(player) {
-    const { x, y, color, angle, steerAngle, id, recovering } = player;
+    const { x, y, color, angle, steerAngle, id, recovering, boosted } = player;
 
     ctx.save();
     ctx.translate(x, y);
@@ -267,6 +261,19 @@ function drawKart(player) {
         ctx.globalAlpha = (Math.floor(Date.now() / 100) % 2 === 0) ? 0.5 : 1;
     }
     ctx.rotate(angle);
+
+    if (boosted) {
+        // Draw fire effect
+        const fireHeight = 20 + Math.random() * 10;
+        const fireWidth = 20 + Math.random() * 5;
+        ctx.fillStyle = `rgba(255, ${Math.random() * 150}, 0, 0.8)`;
+        ctx.beginPath();
+        ctx.moveTo(-fireWidth / 2, kartHeight / 2);
+        ctx.lineTo(fireWidth / 2, kartHeight / 2);
+        ctx.lineTo(0, kartHeight / 2 + fireHeight);
+        ctx.closePath();
+        ctx.fill();
+    }
 
     // Kart Body
     ctx.fillStyle = color;
@@ -477,31 +484,5 @@ function drawActiveItems() {
         }
     }
 }
-
-function distanceToSegment(px, py, x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    if (dx === 0 && dy === 0) {
-        // Le segment est un point
-        return Math.hypot(px - x1, py - y1);
-    }
-
-    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
-    const projX = x1 + t * dx;
-    const projY = y1 + t * dy;
-    return Math.hypot(px - projX, py - projY);
-}
-
-function isOnTrack(x, y, path, trackWidth) {
-    const halfWidth = trackWidth / 2;
-    for (let i = 0; i < path.length - 1; i++) {
-        const p1 = path[i];
-        const p2 = path[i + 1];
-        const d = distanceToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
-        if (d <= halfWidth) return true;
-    }
-    return false;
-}
-
 
 draw();
