@@ -102,9 +102,13 @@ function isPointInPolygon(point, polygon) {
 }
 
 function applyOffTrackPenalty(player) {
-    const isOnTrack = isPointInPolygon(player, currentCircuit.boundaries.outer) && !isPointInPolygon(player, currentCircuit.boundaries.inner);
-    if (!isOnTrack) {
-        player.speed = Math.min(player.speed, 1.0);
+    const onMainTrack = isPointInPolygon(player, currentCircuit.boundaries.outer) && !isPointInPolygon(player, currentCircuit.boundaries.inner);
+    const onShortcut = currentCircuit.boundaries.shortcut && isPointInPolygon(player, currentCircuit.boundaries.shortcut);
+
+    if (onShortcut) {
+        player.speed *= 0.98; // Slight speed reduction for shortcut
+    } else if (!onMainTrack) {
+        player.speed = Math.min(player.speed, 1.0); // Heavy penalty for grass
     }
 }
 

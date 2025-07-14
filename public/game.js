@@ -200,7 +200,7 @@ function drawCircuit() {
     if (!circuit) return;
 
     ctx.strokeStyle = '#a0a0a0';
-    ctx.lineWidth = 120; // Width of the road
+    ctx.lineWidth = 180; // Width of the road
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -211,6 +211,18 @@ function drawCircuit() {
         ctx.lineTo(circuit.path[i].x, circuit.path[i].y);
     }
     ctx.stroke();
+
+    // Draw shortcut area
+    if (circuit.boundaries.shortcut) {
+        ctx.beginPath();
+        ctx.moveTo(circuit.boundaries.shortcut[0].x, circuit.boundaries.shortcut[0].y);
+        for (let i = 1; i < circuit.boundaries.shortcut.length; i++) {
+            ctx.lineTo(circuit.boundaries.shortcut[i].x, circuit.boundaries.shortcut[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(210, 180, 140, 0.8)'; // A dirt/offroad color
+        ctx.fill();
+    }
 
     // Draw finish line
     ctx.lineWidth = 5;
