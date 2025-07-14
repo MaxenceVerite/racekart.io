@@ -7,7 +7,18 @@ body {
   background-color: #f0f0f0;
 }
 
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Prevent scrollbars */
+}
+
+h1 {
+    display: none; /* Hide the title for more space */
+}
+
 canvas {
   border: 1px solid black;
-  background-color: #ffffff;
+  background-color: #333;
+  display: block; /* Remove extra space below canvas */
 }

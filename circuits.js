@@ -1,4 +1,4 @@
-const scale = 2.5;
+const scale = 4.5;
 
 function scalePoints(points) {
     return points.map(p => ({ x: p.x * scale, y: p.y * scale }));

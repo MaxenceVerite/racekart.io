@@ -3,9 +3,17 @@ const socket = io();
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas(); // Initial size
+
 // Kart dimensions
-const kartWidth = 20;
-const kartHeight = 30;
+const kartWidth = 40;
+const kartHeight = 60;
 
 let players = {};
 let selfId = null;
@@ -79,11 +87,11 @@ function updatePlayerState() {
     if (!player) return;
 
     // --- Vehicle Physics ---
-    const acceleration = 0.07;
+    const acceleration = 0.04;
     const deceleration = 0.05;
-    const friction = 0.02;
-    const maxSpeed = 4;
-    const turnSpeed = 0.05; // radians
+    const friction = 0.015;
+    const maxSpeed = 3.5;
+    const turnSpeed = 0.03; // radians
 
     let moved = false;
 
