@@ -15,7 +15,62 @@ app.use(express.static('public'));
 
 let players = {};
 
-// --- Vector Math Helpers ---
+// --- Vector Math and Collision Helpers ---
+
+function getKartCorners(player) {
+    const { x, y, angle } = player;
+    const w = PLAYER_SIZE.width / 2;
+    const h = PLAYER_SIZE.height / 2;
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+
+    const corners = [
+        { x: x + w * cos - h * sin, y: y + w * sin + h * cos }, // Front-right
+        { x: x - w * cos - h * sin, y: y - w * sin + h * cos }, // Front-left
+        { x: x - w * cos + h * sin, y: y - w * sin - h * cos }, // Back-left
+        { x: x + w * cos + h * sin, y: y + w * sin - h * cos }  // Back-right
+    ];
+    return corners;
+}
+
+function getAxes(corners) {
+    const axes = [];
+    for (let i = 0; i < corners.length; i++) {
+        const p1 = corners[i];
+        const p2 = corners[i === corners.length - 1 ? 0 : i + 1];
+        const edge = { x: p1.x - p2.x, y: p1.y - p2.y };
+        const normal = { x: -edge.y, y: edge.x };
+        axes.push(normal);
+    }
+    return axes;
+}
+
+function project(corners, axis) {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const corner of corners) {
+        const dot = corner.x * axis.x + corner.y * axis.y;
+        min = Math.min(min, dot);
+        max = Math.max(max, dot);
+    }
+    return { min, max };
+}
+
+function checkSATCollision(player1, player2) {
+    const corners1 = getKartCorners(player1);
+    const corners2 = getKartCorners(player2);
+    const axes = [...getAxes(corners1), ...getAxes(corners2)];
+
+    for (const axis of axes) {
+        const p1 = project(corners1, axis);
+        const p2 = project(corners2, axis);
+        if (p1.max < p2.min || p2.max < p1.min) {
+            return false; // Found a separating axis
+        }
+    }
+    return true; // No separating axis found
+}
+
 function closestPointOnLine(p, a, b) {
     const ap = { x: p.x - a.x, y: p.y - a.y };
     const ab = { x: b.x - a.x, y: b.y - a.y };
@@ -35,81 +90,77 @@ function isPointInPolygon(point, polygon) {
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
         let xi = polygon[i].x, yi = polygon[i].y;
         let xj = polygon[j].x, yj = polygon[j].y;
-
-        let intersect = ((yi > y) !== (yj > y))
-            && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        let intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
         if (intersect) inside = !inside;
     }
     return inside;
 }
 
 function applyOffTrackPenalty(player) {
-    const isOnTrack = isPointInPolygon(player, currentCircuit.boundaries.outer) &&
-                      !isPointInPolygon(player, currentCircuit.boundaries.inner);
+    const isOnTrack = isPointInPolygon(player, currentCircuit.boundaries.outer) && !isPointInPolygon(player, currentCircuit.boundaries.inner);
     if (!isOnTrack) {
-        player.speed *= 0.95; // Constant friction/drag on grass
+        player.speed = Math.min(player.speed, 1.0);
     }
 }
 
-
 function checkWallCollisions(player) {
-    const boundaries = [...currentCircuit.boundaries.outer, ...currentCircuit.boundaries.inner];
-    let collision = false;
+    const worldBoundaries = [
+        {x: 0, y: 0}, {x: currentCircuit.map_size.width, y: 0}, // Top
+        {x: currentCircuit.map_size.width, y: 0}, {x: currentCircuit.map_size.width, y: currentCircuit.map_size.height}, // Right
+        {x: currentCircuit.map_size.width, y: currentCircuit.map_size.height}, {x: 0, y: currentCircuit.map_size.height}, // Bottom
+        {x: 0, y: currentCircuit.map_size.height}, {x: 0, y: 0} // Left
+    ];
 
+    const boundaries = [...currentCircuit.boundaries.outer, ...currentCircuit.boundaries.inner, ...worldBoundaries];
     for (let i = 0; i < boundaries.length - 1; i++) {
         const p1 = boundaries[i];
-        const p2 = boundaries[i+1];
-
+        const p2 = boundaries[i + 1];
         const closestPoint = closestPointOnLine(player, p1, p2);
         const distanceToWall = dist(player, closestPoint);
 
         if (distanceToWall < PLAYER_SIZE.height / 2) {
-            collision = true;
-
-            // Move player back to the point of collision
             const overlap = (PLAYER_SIZE.height / 2) - distanceToWall;
             const wallVector = { x: p2.x - p1.x, y: p2.y - p1.y };
             const wallAngle = Math.atan2(wallVector.y, wallVector.x);
-
-            // Push player out of the wall along the normal
             const normalAngle = wallAngle - Math.PI / 2;
             player.x += overlap * Math.cos(normalAngle);
             player.y += overlap * Math.sin(normalAngle);
 
-            // Calculate reflection
             const v = { x: player.speed * Math.sin(player.angle), y: -player.speed * Math.cos(player.angle) };
             const n = { x: Math.cos(normalAngle), y: Math.sin(normalAngle) };
             const dot = v.x * n.x + v.y * n.y;
             const v_reflect = { x: v.x - 2 * dot * n.x, y: v.y - 2 * dot * n.y };
-
             player.angle = Math.atan2(v_reflect.x, -v_reflect.y);
-            player.speed *= 0.6; // Speed loss on impact
+            player.speed *= 0.6;
             break;
         }
     }
-    return collision;
 }
 
 function checkCollisions(movedPlayer) {
     for (const id in players) {
         if (id === movedPlayer.id) continue;
-
         const otherPlayer = players[id];
 
-        const dx = otherPlayer.x - movedPlayer.x;
-        const dy = otherPlayer.y - movedPlayer.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const minDistance = PLAYER_SIZE.height;
+        if (checkSATCollision(movedPlayer, otherPlayer)) {
+            // --- Resolve Overlap ---
+            // This part is complex. A simple push-out is used for now.
+            const dx = otherPlayer.x - movedPlayer.x;
+            const dy = otherPlayer.y - movedPlayer.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const overlap = (PLAYER_SIZE.height) - distance; // Approximate overlap
 
-        if (distance < minDistance) {
-            const angle = Math.atan2(dy, dx);
-            const overlap = minDistance - distance;
+            if (distance > 0) {
+                const pushX = (dx / distance) * overlap / 2;
+                const pushY = (dy / distance) * overlap / 2;
+                movedPlayer.x -= pushX;
+                movedPlayer.y -= pushY;
+                otherPlayer.x += pushX;
+                otherPlayer.y += pushY;
+            }
 
-            movedPlayer.x -= (overlap / 2) * Math.cos(angle);
-            movedPlayer.y -= (overlap / 2) * Math.sin(angle);
-            otherPlayer.x += (overlap / 2) * Math.cos(angle);
-            otherPlayer.y += (overlap / 2) * Math.sin(angle);
 
+            // --- Resolve Velocities ---
             const v1 = { x: movedPlayer.speed * Math.sin(movedPlayer.angle), y: -movedPlayer.speed * Math.cos(movedPlayer.angle) };
             const v2 = { x: otherPlayer.speed * Math.sin(otherPlayer.angle), y: -otherPlayer.speed * Math.cos(otherPlayer.angle) };
 
@@ -136,7 +187,6 @@ function checkCollisions(movedPlayer) {
 
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
-
     players[socket.id] = {
         x: currentCircuit.startPosition.x,
         y: currentCircuit.startPosition.y,
@@ -147,7 +197,6 @@ io.on('connection', (socket) => {
         lap: 0,
         checkpoint: 0
     };
-
     socket.emit('gameState', { players: players, circuit: currentCircuit });
     socket.broadcast.emit('newPlayer', players[socket.id]);
 
@@ -172,16 +221,12 @@ io.on('connection', (socket) => {
         applyOffTrackPenalty(player);
         checkLaps(player);
 
-        player.x = Math.max(0, Math.min(currentCircuit.map_size.width, player.x));
-        player.y = Math.max(0, Math.min(currentCircuit.map_size.height, player.y));
-
         socket.broadcast.emit('playerMoved', player);
     });
 });
 
 function checkLaps(player) {
     const prevPos = { x: player.x - player.speed * Math.sin(player.angle), y: player.y + player.speed * Math.cos(player.angle) };
-
     const nextCheckpointIndex = player.checkpoint;
     if (nextCheckpointIndex < currentCircuit.checkpoints.length) {
         const checkpoint = currentCircuit.checkpoints[nextCheckpointIndex];
@@ -189,7 +234,6 @@ function checkLaps(player) {
             player.checkpoint++;
         }
     }
-
     if (player.checkpoint === currentCircuit.checkpoints.length) {
         const finishLine = currentCircuit.finishLine;
         if (line_intersect(prevPos.x, prevPos.y, player.x, player.y, finishLine.start.x, finishLine.start.y, finishLine.end.x, finishLine.end.y)) {
