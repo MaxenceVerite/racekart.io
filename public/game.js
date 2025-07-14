@@ -376,9 +376,9 @@ function draw() {
     ctx.fillStyle = '#6ab04c';
     ctx.fillRect(0, 0, circuit ? circuit.map_size.width : canvas.width, circuit ? circuit.map_size.height : canvas.height);
 
+    drawCircuit();
     drawLootboxes();
     drawActiveItems();
-    drawCircuit();
 
     if (selfPlayer) {
         updatePlayerState();
