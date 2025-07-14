@@ -33,8 +33,8 @@ function checkTrackBoundaries(player) {
     const isOnTrack = isPointInPolygon(player, currentCircuit.boundaries.outer) &&
                       !isPointInPolygon(player, currentCircuit.boundaries.inner);
 
-    if (!isOnTrack && player.speed > 1) {
-        player.speed *= 0.5; // Heavy speed penalty for going off-track
+    if (!isOnTrack) {
+        player.speed = Math.min(player.speed, 1.5); // Cap speed when off-track
     }
 }
 
@@ -109,6 +109,10 @@ io.on('connection', (socket) => {
         checkTrackBoundaries(player);
         checkCollisions(player);
         checkLaps(player);
+
+        // World boundaries
+        player.x = Math.max(0, Math.min(currentCircuit.map_size.width, player.x));
+        player.y = Math.max(0, Math.min(currentCircuit.map_size.height, player.y));
 
         // Broadcast the potentially corrected position and speed
         socket.broadcast.emit('playerMoved', player);

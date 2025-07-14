@@ -79,10 +79,10 @@ function updatePlayerState() {
     if (!player) return;
 
     // --- Vehicle Physics ---
-    const acceleration = 0.1;
+    const acceleration = 0.07;
     const deceleration = 0.05;
     const friction = 0.02;
-    const maxSpeed = 5;
+    const maxSpeed = 4;
     const turnSpeed = 0.05; // radians
 
     let moved = false;
@@ -150,7 +150,7 @@ function drawCircuit() {
     if (!circuit) return;
 
     ctx.strokeStyle = '#a0a0a0';
-    ctx.lineWidth = 50; // Width of the road
+    ctx.lineWidth = 120; // Width of the road
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -229,8 +229,8 @@ function drawMinimap() {
     const minimapY = canvas.height - 160;
     const minimapWidth = 200;
     const minimapHeight = 150;
-    const scaleX = minimapWidth / canvas.width;
-    const scaleY = minimapHeight / canvas.height;
+    const scaleX = minimapWidth / circuit.map_size.width;
+    const scaleY = minimapHeight / circuit.map_size.height;
 
     ctx.save();
 
@@ -288,12 +288,22 @@ function drawUI() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    const selfPlayer = players[selfId];
+
+    // --- Camera Translation ---
+    ctx.save();
+    if (selfPlayer) {
+        const camX = -selfPlayer.x + canvas.width / 2;
+        const camY = -selfPlayer.y + canvas.height / 2;
+        ctx.translate(camX, camY);
+    }
+
     ctx.fillStyle = '#6ab04c';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, circuit ? circuit.map_size.width : canvas.width, circuit ? circuit.map_size.height : canvas.height);
 
     drawCircuit();
 
-    if (selfId) {
+    if (selfPlayer) {
         updatePlayerState();
     }
 
@@ -301,6 +311,9 @@ function draw() {
         drawKart(players[id]);
     }
 
+    ctx.restore(); // Restore context to pre-camera state
+
+    // --- UI Elements (drawn outside of camera translation) ---
     drawMinimap();
     drawUI();
 
