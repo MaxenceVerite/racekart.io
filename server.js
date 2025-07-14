@@ -215,7 +215,8 @@ io.on('connection', (socket) => {
         steerAngle: 0,
         lap: 0,
         checkpoint: 0,
-        item: null
+        item: null,
+        boosted: false
     };
     socket.emit('gameState', { players, circuit: currentCircuit, lootboxes });
     socket.broadcast.emit('newPlayer', players[socket.id]);
@@ -303,6 +304,12 @@ io.on('connection', (socket) => {
                 }
                 player.boosted = false;
             }, 2000);
+        } else if (itemType === 'inverseur') {
+            for (const id in players) {
+                if (id !== socket.id) {
+                    io.to(id).emit('controlsInverted');
+                }
+            }
         }
         player.item = null;
     });
@@ -314,7 +321,7 @@ function checkLootboxPickup(player) {
     for (let i = lootboxes.length - 1; i >= 0; i--) {
         const box = lootboxes[i];
         if (dist(player, box) < PLAYER_SIZE.height) { // Simple distance check for pickup
-            const items = ['carton', 'pierre_bleue', 'grappin', 'oeuf_au_plat'];
+            const items = ['carton', 'pierre_bleue', 'grappin', 'oeuf_au_plat', 'inverseur'];
             player.item = items[Math.floor(Math.random() * items.length)];
 
             // Remove the box and notify clients

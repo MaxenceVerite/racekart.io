@@ -107,6 +107,14 @@ socket.on('playerRecovered', (data) => {
     }
 });
 
+let controlsInverted = false;
+socket.on('controlsInverted', () => {
+    controlsInverted = true;
+    setTimeout(() => {
+        controlsInverted = false;
+    }, 5000);
+});
+
 function initPlayerPhysics(player) {
     player.speed = 0;
     // angle and position are now set by the server
@@ -175,12 +183,12 @@ function updatePlayerState() {
     // Steering (only when moving)
     if (player.speed !== 0) {
         if (keys.ArrowLeft) {
-            player.angle -= turnSpeed;
+            player.angle -= controlsInverted ? -turnSpeed : turnSpeed;
             player.steerAngle = -0.3; // Visual steer
             moved = true;
         }
         if (keys.ArrowRight) {
-            player.angle += turnSpeed;
+            player.angle += controlsInverted ? -turnSpeed : turnSpeed;
             player.steerAngle = 0.3; // Visual steer
             moved = true;
         }
@@ -371,12 +379,14 @@ const itemImages = {
     'carton': new Image(),
     'pierre_bleue': new Image(),
     'grappin': new Image(),
-    'oeuf_au_plat': new Image()
+    'oeuf_au_plat': new Image(),
+    'inverseur': new Image()
 };
 itemImages.carton.src = '/assets/carton.png';
 itemImages.pierre_bleue.src = '/assets/pierre_bleue.png';
 itemImages.grappin.src = '/assets/grappin.png';
 itemImages.oeuf_au_plat.src = '/assets/oeuf_au_plat.png';
+itemImages.inverseur.src = '/assets/inverseur.png';
 
 
 function drawUI() {
