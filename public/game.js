@@ -85,10 +85,25 @@ socket.on('itemDestroyed', (itemId) => {
     activeItems = activeItems.filter(item => item.id !== itemId);
 });
 
-socket.on('playerStopped', (player) => {
-    if(player.id === selfId) {
-        playerFrozen = true;
-        setTimeout(() => playerFrozen = false, 1000);
+socket.on('itemsUpdate', (serverItems) => {
+    activeItems = serverItems;
+});
+
+socket.on('playerHit', (data) => {
+    if (players[data.id]) {
+        players[data.id].recovering = true;
+        if (data.id === selfId) {
+            playerFrozen = true;
+        }
+    }
+});
+
+socket.on('playerRecovered', (data) => {
+    if (players[data.id]) {
+        players[data.id].recovering = false;
+        if (data.id === selfId) {
+            playerFrozen = false;
+        }
     }
 });
 
@@ -236,10 +251,15 @@ function drawCircuit() {
 
 
 function drawKart(player) {
-    const { x, y, color, angle, steerAngle, id } = player;
+    const { x, y, color, angle, steerAngle, id, recovering } = player;
 
     ctx.save();
     ctx.translate(x, y);
+
+    if (recovering) {
+        // Blink effect
+        ctx.globalAlpha = (Math.floor(Date.now() / 100) % 2 === 0) ? 0.5 : 1;
+    }
     ctx.rotate(angle);
 
     // Kart Body
@@ -281,6 +301,7 @@ function drawKart(player) {
     ctx.shadowBlur = 4;
     ctx.fillText(id.substring(0, 5), x - 10, y - kartHeight/2 - 5);
     ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1.0; // Reset alpha
 }
 
 
@@ -418,6 +439,14 @@ function drawActiveItems() {
             ctx.strokeStyle = '#8B4513';
             ctx.lineWidth = 2;
             ctx.strokeRect(item.x - boxSize / 2, item.y - boxSize / 2, boxSize, boxSize);
+        } else if (item.type === 'carapace_rouge') {
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, 15, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = 'darkred';
+            ctx.lineWidth = 2;
+            ctx.stroke();
         }
     }
 }

@@ -260,6 +260,27 @@ io.on('connection', (socket) => {
             };
             activeItems.push(newItem);
             io.emit('itemUsed', newItem);
+        } else if (itemType === 'carapace_rouge') {
+            // Find target (player in front)
+            // This is a simple implementation based on who is next in the players object list
+            // A real implementation would use race standings.
+            const playerIds = Object.keys(players);
+            const currentIndex = playerIds.indexOf(socket.id);
+            const targetIndex = (currentIndex + 1) % playerIds.length;
+            const targetId = playerIds[targetIndex];
+
+            if (targetId !== socket.id) {
+                const newItem = {
+                    id: itemUID++,
+                    type: 'carapace_rouge',
+                    x: player.x,
+                    y: player.y,
+                    targetId: targetId,
+                    speed: 5 // Speed of the shell
+                };
+                activeItems.push(newItem);
+                io.emit('itemUsed', newItem);
+            }
         }
         player.item = null;
     });
@@ -271,7 +292,8 @@ function checkLootboxPickup(player) {
     for (let i = lootboxes.length - 1; i >= 0; i--) {
         const box = lootboxes[i];
         if (dist(player, box) < PLAYER_SIZE.height) { // Simple distance check for pickup
-            player.item = 'carton'; // Award the item
+            const items = ['carton', 'carapace_rouge'];
+            player.item = items[Math.floor(Math.random() * items.length)];
 
             // Remove the box and notify clients
             lootboxes.splice(i, 1);
@@ -290,23 +312,34 @@ function checkLootboxPickup(player) {
 }
 
 function checkItemCollision(player) {
+    if (player.recovering) return;
+
     for (let i = activeItems.length - 1; i >= 0; i--) {
         const item = activeItems[i];
         if (item.type === 'carton') {
-            if (dist(player, item) < PLAYER_SIZE.width) { // Simple collision with carton
-                // Stop the player
+            if (dist(player, item) < PLAYER_SIZE.width) {
                 player.speed = 0;
-                io.to(player.id).emit('playerStopped', player);
-
-                // Remove the item
+                player.recovering = true;
+                io.emit('playerHit', { id: player.id, recovering: true });
                 activeItems.splice(i, 1);
                 io.emit('itemDestroyed', item.id);
-
-                // Player can move again after 1 second
                 setTimeout(() => {
-                    // This is tricky, as client can override. A better way is a server-side flag.
-                    // For now, we just rely on the client not sending updates if speed is 0.
-                }, 1000);
+                    player.recovering = false;
+                    io.emit('playerRecovered', { id: player.id, recovering: false });
+                }, 1500);
+                break;
+            }
+        } else if (item.type === 'carapace_rouge') {
+            if (item.targetId === player.id && dist(player, item) < PLAYER_SIZE.width) {
+                player.speed = 0;
+                player.recovering = true;
+                io.emit('playerHit', { id: player.id, recovering: true });
+                activeItems.splice(i, 1);
+                io.emit('itemDestroyed', item.id);
+                setTimeout(() => {
+                    player.recovering = false;
+                    io.emit('playerRecovered', { id: player.id, recovering: false });
+                }, 1500);
                 break;
             }
         }
@@ -343,3 +376,25 @@ function line_intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+setInterval(() => {
+    updateActiveItems();
+    io.emit('itemsUpdate', activeItems);
+}, 1000 / 60); // 60 times per second
+
+function updateActiveItems() {
+    for (const item of activeItems) {
+        if (item.type === 'carapace_rouge') {
+            const target = players[item.targetId];
+            if (!target) {
+                // Target disconnected, destroy shell
+                activeItems = activeItems.filter(i => i.id !== item.id);
+                continue;
+            }
+
+            const angleToTarget = Math.atan2(target.y - item.y, target.x - item.x);
+            item.x += item.speed * Math.cos(angleToTarget);
+            item.y += item.speed * Math.sin(angleToTarget);
+        }
+    }
+}
