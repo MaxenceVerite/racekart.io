@@ -53,14 +53,14 @@ const circuits = [
             ])
         },
         finishLine: scaleLine({
-            start: { x: 125, y: 100 },
-            end: { x: 125, y: 200 }
+            start: { x: 150, y: 100 },
+            end: { x: 150, y: 200 }
         }),
         checkpoints: [
-            { line: scaleLine({ start: { x: 675, y: 225 }, end: { x: 625, y: 275 } }), position: { x: 650 * scale, y: 250 * scale } },
-            { line: scaleLine({ start: { x: 475, y: 575 }, end: { x: 525, y: 525 } }), position: { x: 500 * scale, y: 550 * scale } },
-            { line: scaleLine({ start: { x: 925, y: 625 }, end: { x: 875, y: 675 } }), position: { x: 900 * scale, y: 650 * scale } },
-            { line: scaleLine({ start: { x: 150, y: 700 }, end: { x: 250, y: 700 } }), position: { x: 200 * scale, y: 700 * scale } }
+            { line: scaleLine({ start: { x: 650, y: 100 }, end: { x: 650, y: 200 } }), position: { x: 650 * scale, y: 150 * scale } },
+            { line: scaleLine({ start: { x: 500, y: 400 }, end: { x: 400, y: 500 } }), position: { x: 450 * scale, y: 450 * scale } },
+            { line: scaleLine({ start: { x: 900, y: 500 }, end: { x: 900, y: 600 } }), position: { x: 900 * scale, y: 550 * scale } },
+            { line: scaleLine({ start: { x: 100, y: 700 }, end: { x: 200, y: 700 } }), position: { x: 150 * scale, y: 700 * scale } }
         ],
         lootboxes: [
             { x: 400 * scale, y: 150 * scale },

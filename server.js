@@ -236,6 +236,7 @@ io.on('connection', (socket) => {
         player.angle = movementData.angle;
         player.steerAngle = movementData.steerAngle;
         player.speed = movementData.speed;
+        player.boosted = movementData.boosted;
 
         checkWorldBounds(player);
         checkWallCollisions(player);
@@ -365,12 +366,20 @@ function checkItemCollision(player) {
 function checkLaps(player) {
     const prevPos = { x: player.x - player.speed * Math.sin(player.angle), y: player.y + player.speed * Math.cos(player.angle) };
     const nextCheckpointIndex = player.checkpoint;
-    if (nextCheckpointIndex < currentCircuit.checkpoints.length) {
-        const checkpoint = currentCircuit.checkpoints[nextCheckpointIndex].line;
+
+    // Check for missed checkpoints
+    for (let i = 0; i < currentCircuit.checkpoints.length; i++) {
+        const checkpoint = currentCircuit.checkpoints[i].line;
         if (line_intersect(prevPos.x, prevPos.y, player.x, player.y, checkpoint.start.x, checkpoint.start.y, checkpoint.end.x, checkpoint.end.y)) {
-            player.checkpoint++;
+            if (i === nextCheckpointIndex) {
+                player.checkpoint++;
+            } else {
+                // Player missed a checkpoint, reset their progress
+                player.checkpoint = 0;
+            }
         }
     }
+
     if (player.checkpoint === currentCircuit.checkpoints.length) {
         const finishLine = currentCircuit.finishLine;
         if (line_intersect(prevPos.x, prevPos.y, player.x, player.y, finishLine.start.x, finishLine.start.y, finishLine.end.x, finishLine.end.y)) {

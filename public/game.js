@@ -131,7 +131,7 @@ window.addEventListener('keydown', (e) => {
     if (keys.hasOwnProperty(e.key)) {
         keys[e.key] = true;
     }
-    if (e.key === 'Enter') {
+    if (e.code === 'Space') {
         const player = players[selfId];
         if (player && player.item) {
             socket.emit('useItem', player.item);
@@ -214,7 +214,8 @@ function updatePlayerState() {
             y: player.y,
             angle: player.angle,
             steerAngle: player.steerAngle,
-            speed: player.speed
+            speed: player.speed,
+            boosted: player.boosted
         });
     }
 }
@@ -255,6 +256,15 @@ function drawCircuit() {
     ctx.lineTo(circuit.finishLine.end.x, circuit.finishLine.end.y);
     ctx.stroke();
 
+    // Draw checkpoints
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'yellow';
+    for (const checkpoint of circuit.checkpoints) {
+        ctx.beginPath();
+        ctx.moveTo(checkpoint.line.start.x, checkpoint.line.start.y);
+        ctx.lineTo(checkpoint.line.end.x, checkpoint.line.end.y);
+        ctx.stroke();
+    }
 }
 
 
