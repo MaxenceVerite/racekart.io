@@ -9,20 +9,25 @@ const kartHeight = 30;
 
 let players = {};
 let selfId = null;
+let circuit = null;
 
 socket.on('connect', () => {
     selfId = socket.id;
     console.log('Connected to server with ID:', selfId);
 });
 
-socket.on('currentPlayers', (serverPlayers) => {
-    players = serverPlayers;
+socket.on('gameState', (gameState) => {
+    players = gameState.players;
+    circuit = gameState.circuit;
     // Initialize physics properties for all players
     for(let id in players) {
-        initPlayerPhysics(players[id]);
+        if (!players[id].speed) { // only init if not already set
+             initPlayerPhysics(players[id]);
+        }
     }
     requestAnimationFrame(draw);
 });
+
 
 socket.on('newPlayer', (playerInfo) => {
     initPlayerPhysics(playerInfo);
@@ -39,10 +44,15 @@ socket.on('playerMoved', (playerInfo) => {
     }
 });
 
+socket.on('lapComplete', (data) => {
+    if (players[data.id]) {
+        players[data.id].lap = data.lap;
+    }
+});
+
 function initPlayerPhysics(player) {
     player.speed = 0;
-    player.angle = 0;
-    player.steerAngle = 0; // For wheel animation
+    // angle and position are now set by the server
 }
 
 const keys = {
@@ -124,19 +134,42 @@ function updatePlayerState() {
     }
 
 
-    // Clamp position to canvas bounds
-    player.x = Math.max(kartWidth / 2, Math.min(canvas.width - kartWidth / 2, player.x));
-    player.y = Math.max(kartHeight / 2, Math.min(canvas.height - kartHeight / 2, player.y));
-
     // Emit changes to the server
     if (moved) {
         socket.emit('playerMovement', {
             x: player.x,
             y: player.y,
             angle: player.angle,
-            steerAngle: player.steerAngle
+            steerAngle: player.steerAngle,
+            speed: player.speed
         });
     }
+}
+
+function drawCircuit() {
+    if (!circuit) return;
+
+    ctx.strokeStyle = '#a0a0a0';
+    ctx.lineWidth = 50; // Width of the road
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Draw the road
+    ctx.beginPath();
+    ctx.moveTo(circuit.path[0].x, circuit.path[0].y);
+    for (let i = 1; i < circuit.path.length; i++) {
+        ctx.lineTo(circuit.path[i].x, circuit.path[i].y);
+    }
+    ctx.stroke();
+
+    // Draw finish line
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'white';
+    ctx.beginPath();
+    ctx.moveTo(circuit.finishLine.start.x, circuit.finishLine.start.y);
+    ctx.lineTo(circuit.finishLine.end.x, circuit.finishLine.end.y);
+    ctx.stroke();
+
 }
 
 
@@ -161,8 +194,7 @@ function drawKart(player) {
     ctx.fillRect(-kartWidth / 2 - wheelWidth, kartHeight / 4, wheelWidth, wheelHeight); // Rear Left
     ctx.fillRect(kartWidth / 2, kartHeight / 4, wheelWidth, wheelHeight);           // Rear Right
 
-    // Front wheels (steerable) - save context for individual rotation
-    // Front Left
+    // Front wheels (steerable)
     ctx.save();
     ctx.translate(-kartWidth / 2, -kartHeight / 4);
     ctx.rotate(steerAngle);
@@ -170,7 +202,6 @@ function drawKart(player) {
     ctx.fillRect(-wheelWidth / 2, -wheelHeight / 2, wheelWidth, wheelHeight);
     ctx.restore();
 
-    // Front Right
     ctx.save();
     ctx.translate(kartWidth / 2, -kartHeight / 4);
     ctx.rotate(steerAngle);
@@ -191,13 +222,76 @@ function drawKart(player) {
 }
 
 
+function drawMinimap() {
+    if (!circuit) return;
+
+    const minimapX = canvas.width - 210;
+    const minimapY = canvas.height - 160;
+    const minimapWidth = 200;
+    const minimapHeight = 150;
+    const scaleX = minimapWidth / canvas.width;
+    const scaleY = minimapHeight / canvas.height;
+
+    ctx.save();
+
+    // Draw minimap background
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = 'black';
+    ctx.fillRect(minimapX, minimapY, minimapWidth, minimapHeight);
+    ctx.globalAlpha = 1.0;
+
+    // Draw minimap border
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(minimapX, minimapY, minimapWidth, minimapHeight);
+
+    // Draw circuit path on minimap
+    ctx.strokeStyle = '#a0a0a0';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    const startPoint = circuit.path[0];
+    ctx.moveTo(minimapX + startPoint.x * scaleX, minimapY + startPoint.y * scaleY);
+    for (let i = 1; i < circuit.path.length; i++) {
+        const point = circuit.path[i];
+        ctx.lineTo(minimapX + point.x * scaleX, minimapY + point.y * scaleY);
+    }
+    ctx.stroke();
+
+    // Draw players on minimap
+    for (const id in players) {
+        const player = players[id];
+        ctx.fillStyle = player.color;
+        const playerX = minimapX + player.x * scaleX;
+        const playerY = minimapY + player.y * scaleY;
+        ctx.beginPath();
+        ctx.arc(playerX, playerY, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function drawUI() {
+    if (!selfId || !players[selfId]) return;
+
+    const player = players[selfId];
+
+    ctx.fillStyle = 'white';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    // Display Lap count
+    ctx.fillText(`Lap: ${player.lap}`, 20, 20);
+}
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Set a background color for the track
-    ctx.fillStyle = '#6ab04c'; // A grassy green
+    ctx.fillStyle = '#6ab04c';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    drawCircuit();
 
     if (selfId) {
         updatePlayerState();
@@ -206,6 +300,9 @@ function draw() {
     for (const id in players) {
         drawKart(players[id]);
     }
+
+    drawMinimap();
+    drawUI();
 
     requestAnimationFrame(draw);
 }
